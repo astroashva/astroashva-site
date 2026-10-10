@@ -1,3 +1,14 @@
+## Hero canvas, 11 October 2026
+
+The drawing behind the home page title is a pluggable canvas: `kundali-north`
+(default), `kundali-south` and `diya` (Diwali). The head script in `index.html`
+picks it before first paint (`?canvas=<id>` preview, else the cached
+`site_hero` config); `hero-c.js` draws it and refreshes the config from the
+public `app_config.site_hero` row after paint, swapping in place only if it
+differs. Change it, or schedule a festival preset, from the admin console's
+Icon palette page (Website canvas section); no deploy needed. The canvas has
+equal gaps above and below (6% of the screen height, 40 to 72px).
+
 ## No public APK or IPA, 29 September 2026
 
 Founder decision for Google Ads approval: the site does not host or link any

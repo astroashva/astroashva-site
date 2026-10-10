@@ -120,6 +120,28 @@
     var h=null; try{ h=new URLSearchParams(location.search).get('hero'); }catch(e){}
     try{ localStorage.removeItem('heroVariant'); }catch(e){}
     h=(h==='a'||h==='b')?h:'c'; d.classList.add('hero-'+h+'-on');
+    /* Hero C's canvas (the drawing behind the words). ?canvas=<id> previews
+       one; otherwise the last site_hero config seen (app_config, cached by
+       hero-c.js) decides: a dated preset active on this clock, else its
+       canvas, else kundali-north. hero-c.js refreshes the config after paint
+       and swaps only if it differs. Every canvas fills the same rectangle. */
+    var CV=['kundali-north','kundali-south','diya'];
+    window.AA_CANVASES=CV;
+    window.AA_pickCanvas=function(c){
+      if(!c||typeof c!=='object') return null;
+      var now=Date.now(), ps=Array.isArray(c.presets)?c.presets:[];
+      for(var i=0;i<ps.length;i++){
+        var p=ps[i]; if(!p||CV.indexOf(p.canvas)<0) continue;
+        var f=Date.parse(p.from), u=Date.parse(p.until);
+        if(f<=now&&now<=u) return p.canvas;
+      }
+      return CV.indexOf(c.canvas)>=0?c.canvas:null;
+    };
+    var cv=null, cq=null;
+    try{ cq=new URLSearchParams(location.search).get('canvas'); }catch(e){}
+    if(CV.indexOf(cq)>=0){ cv=cq; window.AA_CANVAS_OVERRIDE=cq; }
+    else { try{ cv=window.AA_pickCanvas(JSON.parse(localStorage.getItem('aa-site-hero')||'null')); }catch(e){} }
+    d.setAttribute('data-canvas',cv||'kundali-north');
     if(h==='a'){
       var k=document.createElement('link'); k.rel='preload'; k.as='image'; k.setAttribute('fetchpriority','high');
       k.href='shots/landing/'+l+'/12-kundali-hero-360.webp'; document.head.appendChild(k);
@@ -127,8 +149,8 @@
   })();
 </script>
 <script src="/site-theme.js" defer></script>
-<link rel="stylesheet" href="/hero-c.css?v=12" />
-<script src="/hero-c.js?v=15" defer></script>
+<link rel="stylesheet" href="/hero-c.css?v=13" />
+<script src="/hero-c.js?v=16" defer></script>
 </head>
 <body>
 <script src="/app-bar.js?v=2"></script>
@@ -194,7 +216,7 @@
 <section class="hc" id="hero-c" aria-labelledby="hc-title">
   <div class="hc-sky" data-hc-sky aria-hidden="true"></div>
   <div class="hc-copy">
-    <p class="hc-eyebrow"><span lang="en">Vedic astrology, computed</span><span lang="hi">वैदिक ज्योतिष, गणना से</span></p>
+    <p class="hc-eyebrow"><span class="ev-base"><span lang="en">Vedic astrology, computed</span><span lang="hi">वैदिक ज्योतिष, गणना से</span></span><span class="ev-diya"><span lang="en">Shubh Deepavali</span><span lang="hi">शुभ दीपावली</span></span></p>
     <h1 class="hc-word" id="hc-title"><span aria-hidden="true">ASTROASHVA</span><span class="sr-only">AstroAshva</span></h1>
     <p class="hc-tag"><span lang="en">One who believes</span><span lang="hi">विश्वास करने वाले के लिए</span></p>
     <div class="hc-stores">

@@ -46,9 +46,127 @@
     return e;
   }
 
-  /* ---------- The chart ---------- */
+  /* ---------- The canvas ----------
+     The drawing behind the words is one of a few canvases, chosen by
+     html[data-canvas] (index.html sets it before first paint). Each one is
+     drawn at the stage's pixel size into the same rectangle, so a swap never
+     moves the words. */
   var drawn = reduce, want = false, hits = {};
+  var narrow = window.matchMedia ? matchMedia('(max-width: 768px)') : { matches: false };
+  function canvasId() {
+    var c = root.getAttribute('data-canvas');
+    return (window.AA_CANVASES || []).indexOf(c) >= 0 ? c : 'kundali-north';
+  }
   function pts(a) { return a.map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' '); }
+  function P(d) { return 'M' + d.map(function (p) { return p[0].toFixed(2) + ' ' + p[1].toFixed(2); }).join('L'); }
+  function f2(n) { return n.toFixed(2); }
+
+  // North Indian: outer square, both full diagonals and the inner diamond
+  // through the side midpoints make twelve houses, Lagna at the top.
+  function north(q, g, lines) {
+    var house = {
+      1: [q.tm, q.ur, q.c, q.ul], 2: [q.tl, q.tm, q.ul], 3: [q.tl, q.ul, q.lm], 4: [q.lm, q.ul, q.c, q.ll],
+      5: [q.lm, q.ll, q.bl], 6: [q.bl, q.ll, q.bm], 7: [q.bm, q.ll, q.c, q.lr], 8: [q.bm, q.lr, q.br],
+      9: [q.br, q.lr, q.rm], 10: [q.rm, q.lr, q.c, q.ur], 11: [q.rm, q.ur, q.tr], 12: [q.tr, q.ur, q.tm]
+    };
+    for (var h = 1; h <= 12; h++) hits[h] = el('polygon', { 'class': 'hit', 'data-h': h, points: pts(house[h]) }, g);
+    // [class, path, "delay,duration" ms]: the frame from the Lagna point
+    // both ways, the diagonals, the diamond.
+    lines.push(['hl', P([q.tm, q.tr, q.br, q.bm]), '550,1800'], ['hl', P([q.tm, q.tl, q.bl, q.bm]), '550,1800'],
+      ['hl', P([q.tl, q.br]), '700,1700'], ['hl', P([q.tr, q.bl]), '700,1700'],
+      ['hl', P([q.tm, q.rm, q.bm]), '850,1600'], ['hl', P([q.tm, q.lm, q.bm]), '850,1600'],
+      ['lagna', P([q.ul, q.tm, q.ur]), '2200,1000']);
+  }
+
+  // South Indian: a four by four grid with the middle four cells open. The
+  // signs are fixed (Pisces top left, then clockwise); Lagna sits in Aries,
+  // so house 1 is the second cell of the top row and the houses run clockwise.
+  var SOUTH = { 1: [1, 0], 2: [2, 0], 3: [3, 0], 4: [3, 1], 5: [3, 2], 6: [3, 3], 7: [2, 3], 8: [1, 3], 9: [0, 3], 10: [0, 2], 11: [0, 1], 12: [0, 0] };
+  function south(q, g, lines) {
+    var L = q.tl[0], T = q.tl[1], R = q.br[0], B = q.br[1], cw = (R - L) / 4, ch = (B - T) / 4;
+    function X(i) { return L + cw * i; }
+    function Y(j) { return T + ch * j; }
+    for (var h = 1; h <= 12; h++) {
+      var c = SOUTH[h];
+      hits[h] = el('polygon', { 'class': 'hit', 'data-h': h, points: pts([[X(c[0]), Y(c[1])], [X(c[0] + 1), Y(c[1])], [X(c[0] + 1), Y(c[1] + 1)], [X(c[0]), Y(c[1] + 1)]]) }, g);
+    }
+    lines.push(['hl', P([q.tm, q.tr, q.br, q.bm]), '550,1800'], ['hl', P([q.tm, q.tl, q.bl, q.bm]), '550,1800'],
+      ['hl', P([[X(1), T], [X(1), B]]), '700,1600'], ['hl', P([[X(3), T], [X(3), B]]), '700,1600'],
+      ['hl', P([[L, Y(1)], [R, Y(1)]]), '760,1600'], ['hl', P([[L, Y(3)], [R, Y(3)]]), '760,1600'],
+      ['hl', P([[X(2), T], [X(2), Y(1)]]), '1000,900'], ['hl', P([[X(2), Y(3)], [X(2), B]]), '1000,900'],
+      ['hl', P([[L, Y(2)], [X(1), Y(2)]]), '1000,900'], ['hl', P([[X(3), Y(2)], [R, Y(2)]]), '1000,900'],
+      // Lagna: the house 1 cell in the accent, with the customary slash
+      // across its corner.
+      ['lagna', P([[X(1), Y(1)], [X(1), T], [X(2), T], [X(2), Y(1)], [X(1), Y(1)]]), '2200,1000'],
+      ['lagna', P([[X(1), T + ch * .34], [X(1) + ch * .34, T]]), '2900,400']);
+  }
+
+  // Diya (Diwali): the same frame, a toran of mango leaves and marigolds
+  // hanging from the top, a quarter rangoli in each corner and a row of
+  // diyas along the bottom, lit one by one from the middle. On phones only
+  // the toran and the lamps, behind the words.
+  function diya(q, lines, W, H, phone) {
+    var L = q.tl[0], T = q.tl[1], R = q.br[0], B = q.br[1];
+    if (!phone) lines.push(['hl', P([q.tm, q.tr, q.br, q.bm]), '550,1800'], ['hl', P([q.tm, q.tl, q.bl, q.bm]), '550,1800']);
+    // Toran: swags of a cord with a leaf at every knot and a marigold at the
+    // bottom of every swag.
+    // On desktop the toran starts and ends clear of the corner rangoli.
+    var rr = Math.min(W, H) * .11, tl = phone ? L : L + rr * 1.3, tr = phone ? R : R - rr * 1.3;
+    var n = Math.max(4, Math.round((tr - tl) / (phone ? 70 : 132)));
+    var sw = (tr - tl) / n, sag = Math.min(phone ? 14 : 24, H * .035), leaf = Math.min(phone ? 18 : 28, H * .04);
+    var ty = phone ? T + 8 : T, d = 'M' + f2(tl) + ' ' + f2(ty);
+    for (var i = 0; i < n; i++) {
+      var x0 = tl + sw * i, x1 = x0 + sw;
+      d += 'Q' + f2(x0 + sw / 2) + ' ' + f2(ty + sag * 2) + ' ' + f2(x1) + ' ' + f2(ty);
+    }
+    lines.push(['dl', d, '900,1500']);
+    for (var k = 1; k < n; k++) {
+      var lx = tl + sw * k, ly = ty, w = leaf * .32, t = (900 + k * 60) + ',700';
+      lines.push(['dl', 'M' + f2(lx) + ' ' + f2(ly) + 'C' + f2(lx + w) + ' ' + f2(ly + leaf * .3) + ' ' + f2(lx + w * .7) + ' ' + f2(ly + leaf * .8) + ' ' + f2(lx) + ' ' + f2(ly + leaf) +
+        'C' + f2(lx - w * .7) + ' ' + f2(ly + leaf * .8) + ' ' + f2(lx - w) + ' ' + f2(ly + leaf * .3) + ' ' + f2(lx) + ' ' + f2(ly) + 'M' + f2(lx) + ' ' + f2(ly + leaf * .15) + 'L' + f2(lx) + ' ' + f2(ly + leaf * .8), t]);
+    }
+    for (var m = 0; m < n; m++) {
+      var mx = tl + sw * (m + .5), my = ty + sag + (phone ? 4 : 6), r = phone ? 3.5 : 5;
+      lines.push(['ac', 'M' + f2(mx - r) + ' ' + f2(my) + 'a' + r + ' ' + r + ' 0 1 0 ' + (2 * r) + ' 0a' + r + ' ' + r + ' 0 1 0 ' + (-2 * r) + ' 0', (1500 + m * 60) + ',600']);
+      lines.push(['dl', 'M' + f2(mx - r * 1.9) + ' ' + f2(my) + 'a' + (r * 1.9) + ' ' + (r * 1.9) + ' 0 1 0 ' + f2(r * 3.8) + ' 0a' + (r * 1.9) + ' ' + (r * 1.9) + ' 0 1 0 ' + f2(-r * 3.8) + ' 0', (1500 + m * 60) + ',700']);
+    }
+    // Corner rangoli: three quarter rings, lotus petals between the inner
+    // two, dots round the outside.
+    if (!phone) {
+      [[L, B, -1], [R, B, -1], [L, T, 1], [R, T, 1]].forEach(function (c, ci) {
+        var cx = c[0], cy = c[1], sx = cx === L ? 1 : -1, sy = cy === T ? 1 : -1, t0 = 1200 + ci * 120;
+        function pt(rad, a) { return [cx + sx * rad * Math.cos(a), cy + sy * rad * Math.sin(a)]; }
+        function arc(rad) { var a = pt(rad, 0), b = pt(rad, Math.PI / 2); return 'M' + f2(a[0]) + ' ' + f2(a[1]) + 'A' + f2(rad) + ' ' + f2(rad) + ' 0 0 ' + (sx * sy > 0 ? 1 : 0) + ' ' + f2(b[0]) + ' ' + f2(b[1]); }
+        lines.push(['dl', arc(rr * .42), t0 + ',800'], ['dl', arc(rr * .62), t0 + ',800'], ['dl', arc(rr), (t0 + 100) + ',900']);
+        for (var j = 0; j < 5; j++) {
+          var a = (j + .5) * Math.PI / 10, a0 = pt(rr * .62, a), a1 = pt(rr, a), sp = .13;
+          var c1 = pt(rr * .81, a - sp), c2 = pt(rr * .81, a + sp);
+          lines.push(['ac', 'M' + f2(a0[0]) + ' ' + f2(a0[1]) + 'Q' + f2(c1[0]) + ' ' + f2(c1[1]) + ' ' + f2(a1[0]) + ' ' + f2(a1[1]) + 'Q' + f2(c2[0]) + ' ' + f2(c2[1]) + ' ' + f2(a0[0]) + ' ' + f2(a0[1]), (t0 + 500 + j * 80) + ',600']);
+        }
+        for (var e = 0; e <= 6; e++) {
+          var dp = pt(rr * 1.14, e * Math.PI / 12);
+          el('circle', { 'class': 'dot', cx: f2(dp[0]), cy: f2(dp[1]), r: 1.4 }, svg);
+        }
+      });
+    }
+    // The lamps: an open bowl with a lip, a small foot, and a flame.
+    var count = phone ? 5 : (W > 1000 ? 9 : 7);
+    var s = Math.min(phone ? 34 : 54, (R - L) / (count * 2.4), H * .085);
+    var gap = Math.min((R - L) * (phone ? .19 : .085), s * 2.6);
+    var by = phone ? B - 84 : B - Math.max(28, H * .06);
+    for (var dI = 0; dI < count; dI++) {
+      var off = dI - (count - 1) / 2, cx = (L + R) / 2 + off * gap, y1 = by - s * .34;
+      var order = Math.abs(off), t1 = 1800 + order * 220;
+      var bowl = 'M' + f2(cx - s * .62) + ' ' + f2(y1) + 'C' + f2(cx - s * .5) + ' ' + f2(by + s * .02) + ' ' + f2(cx + s * .5) + ' ' + f2(by + s * .02) + ' ' + f2(cx + s * .62) + ' ' + f2(y1) +
+        'C' + f2(cx + s * .3) + ' ' + f2(y1 + s * .1) + ' ' + f2(cx - s * .3) + ' ' + f2(y1 + s * .1) + ' ' + f2(cx - s * .62) + ' ' + f2(y1) +
+        'M' + f2(cx - s * .2) + ' ' + f2(by - s * .02) + 'L' + f2(cx - s * .26) + ' ' + f2(by + s * .12) + 'L' + f2(cx + s * .26) + ' ' + f2(by + s * .12) + 'L' + f2(cx + s * .2) + ' ' + f2(by - s * .02);
+      lines.push(['dl', bowl, t1 + ',800']);
+      var fb = y1 + s * .02, fh = s * .5, fw = s * .15;
+      lines.push(['flame', 'M' + f2(cx) + ' ' + f2(fb - fh) + 'C' + f2(cx + fw) + ' ' + f2(fb - fh * .55) + ' ' + f2(cx + fw * .9) + ' ' + f2(fb - fh * .1) + ' ' + f2(cx) + ' ' + f2(fb) +
+        'C' + f2(cx - fw * .9) + ' ' + f2(fb - fh * .1) + ' ' + f2(cx - fw) + ' ' + f2(fb - fh * .55) + ' ' + f2(cx) + ' ' + f2(fb - fh) + 'Z', (t1 + 700) + ',500']);
+    }
+  }
+
   function build() {
     var r = stage.getBoundingClientRect();
     var W = Math.round(r.width), Ht = Math.round(r.height);
@@ -56,48 +174,48 @@
     lastW = W; lastH = Ht;
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + Ht);
     svg.innerHTML = '';
+    hits = {};
+    var cv = canvasId(), phone = narrow.matches;
     // Half a pixel in so the 1px frame lands on whole device pixels.
     var o = .5, L = o, T = o, R = W - o, B = Ht - o, cx = W / 2, cy = Ht / 2;
     var q = { tm: [cx, T], rm: [R, cy], bm: [cx, B], lm: [L, cy], tl: [L, T], tr: [R, T], br: [R, B], bl: [L, B], c: [cx, cy],
       // Where the diagonals cross the inner diamond.
       ul: [(L + cx) / 2, (T + cy) / 2], ur: [(R + cx) / 2, (T + cy) / 2], ll: [(L + cx) / 2, (B + cy) / 2], lr: [(R + cx) / 2, (B + cy) / 2] };
-    // Houses, counter-clockwise from Lagna at the top, as in a real chart.
-    var house = {
-      1: [q.tm, q.ur, q.c, q.ul], 2: [q.tl, q.tm, q.ul], 3: [q.tl, q.ul, q.lm], 4: [q.lm, q.ul, q.c, q.ll],
-      5: [q.lm, q.ll, q.bl], 6: [q.bl, q.ll, q.bm], 7: [q.bm, q.ll, q.c, q.lr], 8: [q.bm, q.lr, q.br],
-      9: [q.br, q.lr, q.rm], 10: [q.rm, q.lr, q.c, q.ur], 11: [q.rm, q.ur, q.tr], 12: [q.tr, q.ur, q.tm]
-    };
-    var g = el('g', {}, svg);
-    for (var h = 1; h <= 12; h++) {
-      hits[h] = el('polygon', { 'class': 'hit', 'data-h': h, points: pts(house[h]) }, g);
-    }
-    function P(d) { return 'M' + d.map(function (p) { return p[0].toFixed(2) + ' ' + p[1].toFixed(2); }).join('L'); }
-    // The frame from the Lagna point both ways, the diagonals, the diamond.
-    var lines = [
-      // [class, path, delay ms, duration ms]
-      ['hl', P([q.tm, q.tr, q.br, q.bm]), '550,1800'], ['hl', P([q.tm, q.tl, q.bl, q.bm]), '550,1800'],
-      ['hl', P([q.tl, q.br]), '700,1700'], ['hl', P([q.tr, q.bl]), '700,1700'],
-      ['hl', P([q.tm, q.rm, q.bm]), '850,1600'], ['hl', P([q.tm, q.lm, q.bm]), '850,1600'],
-      ['lagna', P([q.ul, q.tm, q.ur]), '2200,1000']
-    ];
+    var g = el('g', {}, svg), lines = [];
+    if (cv === 'diya') diya(q, lines, W, Ht, phone);
+    else if (cv === 'kundali-south') south(q, g, lines);
+    else north(q, g, lines);
     // Four lines from the corners of the screen (as it stands at the top of
     // the page) to the chart's corners. They slide in with the intro, then
     // stay as a faint hairline; rebuilt with the chart on every resize. They
     // end exactly at the screen's edges, so they never widen the page.
-    var vw = document.documentElement.clientWidth, vh = window.innerHeight;
-    var pageTop = r.top + (window.scrollY || window.pageYOffset || 0);
-    var x0 = -r.left, x1 = vw - r.left, y0 = -pageTop, y1 = Math.max(vh - pageTop, B + 40);
-    [[[x0, y0], q.tl], [[x1, y0], q.tr], [[x1, y1], q.br], [[x0, y1], q.bl]].forEach(function (e) {
-      lines.push(['edge', P([e[0], e[1]]), '0,900']);
-    });
+    if (!phone) {
+      var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      var pageTop = r.top + (window.scrollY || window.pageYOffset || 0);
+      var x0 = -r.left, x1 = vw - r.left, y0 = -pageTop, y1 = Math.max(vh - pageTop, B + 40);
+      [[[x0, y0], q.tl], [[x1, y0], q.tr], [[x1, y1], q.br], [[x0, y1], q.bl]].forEach(function (e) {
+        lines.push(['edge', P([e[0], e[1]]), '0,900']);
+      });
+    }
     lines.forEach(function (d) {
       var p = el('path', { 'class': d[0], d: d[1], 'data-t': d[2] }, svg);
       var len = Math.ceil(p.getTotalLength()) + 2;
       p.style.strokeDasharray = len + ' ' + len;
       p.style.strokeDashoffset = drawn ? '0' : String(len);
+      if (d[0] === 'flame' && !drawn) p.style.opacity = '0';
       p._len = len;
     });
     if (want && !drawn) draw();
+  }
+
+  /* Switch to another canvas in place (config arriving after paint). The
+     rectangle is the same, so only the drawing and the labels change. */
+  function setCanvas(id) {
+    if ((window.AA_CANVASES || []).indexOf(id) < 0 || id === canvasId()) return;
+    hide();
+    root.setAttribute('data-canvas', id);
+    build();
+    svg.classList.remove('swap'); void svg.getBoundingClientRect(); svg.classList.add('swap');
   }
 
   // The draw waits for the lines to exist (hero-c.css may land after this
@@ -109,7 +227,10 @@
     Array.prototype.forEach.call(svg.querySelectorAll('path'), function (p) {
       var t = p.getAttribute('data-t').split(',');
       p.style.strokeDashoffset = '0';
+      var flame = p.classList.contains('flame');
+      if (flame) p.style.opacity = '';
       if (p.animate) {
+        if (flame) anims.push(p.animate([{ opacity: 0 }, { opacity: 1 }], { delay: +t[0], duration: +t[1] + 300, easing: 'ease-out', fill: 'backwards' }));
         anims.push(p.animate([{ strokeDashoffset: p._len }, { strokeDashoffset: 0 }],
           { delay: +t[0], duration: +t[1], easing: 'cubic-bezier(.45,0,.15,1)', fill: 'backwards' }));
         if (p.classList.contains('edge')) {
@@ -126,22 +247,24 @@
 
   /* ---------- Equal space above and below the chart (desktop) ----------
      The hero runs from the header to the bottom of the first screen, and the
-     chart sits in it with the same gap above (from the header's bottom) as
-     below (to the screen's bottom), whatever sits between header and hero. */
+     canvas sits in it with the same gap above (from the header's bottom) as
+     below (to the screen's bottom), whatever sits between header and hero.
+     The gap grows with the screen (40px at 670px tall, 54 at 900, 65 at
+     1080, at most 72), and the canvas takes the height that is left, so the
+     whole rectangle and both gaps always fit the first screen. */
   var header = document.querySelector('.site-header');
   function fitHero() {
     if (narrow.matches || !header) { hc.style.height = ''; stage.style.top = ''; stage.style.bottom = ''; return; }
     var y = window.scrollY || window.pageYOffset || 0;
     var hb = header.getBoundingClientRect().bottom + y, ht = hc.getBoundingClientRect().top + y;
     var vh = window.innerHeight, extra = Math.max(0, ht - hb);
-    var g = Math.round(Math.min(44, Math.max(20, vh * 0.032)));
+    var g = Math.round(Math.min(72, Math.max(40, vh * 0.06)));
     var h = Math.max(560, vh - ht);
-    // Below the minimum height the chart still keeps equal gaps inside it.
+    // Below the minimum height the canvas still keeps equal gaps inside it.
     hc.style.height = h + 'px';
     stage.style.top = g + 'px';
     stage.style.bottom = (vh - ht >= 560 ? g + extra : g) + 'px';
   }
-  var narrow = window.matchMedia ? matchMedia('(max-width: 768px)') : { matches: false };
   fitHero();
   window.addEventListener('resize', fitHero);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHero);
@@ -373,6 +496,33 @@
     if (phone.matches) drawSky();
     var onPhone = function () { if (phone.matches) drawSky(); };
     if (phone.addEventListener) phone.addEventListener('change', onPhone); else if (phone.addListener) phone.addListener(onPhone);
+  }
+
+  /* ---------- Which canvas: the site_hero config ----------
+     app_config row site_hero (public read; edited in the admin's Website
+     canvas section): {"canvas":"kundali-north","presets":[{"id","name",
+     "canvas","from","until"}]}. A preset active on this visitor's clock wins,
+     else canvas, else kundali-north. Fetched after first paint, cached for the
+     next visit (index.html reads the cache before paint), swapped in place
+     only if it differs. Any failure keeps what is on screen. ?canvas=<id>
+     previews a canvas and is never replaced. */
+  var REST = 'https://gttszlununmqivrqevwv.supabase.co/rest/v1';
+  // The anon key is public by design (landing.js uses the same one); app_config is read-only to it.
+  var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0dHN6bHVudW5tcWl2cnFldnd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzEwMjQsImV4cCI6MjA4ODgwNzAyNH0.owDFA7ZPpDYoTmcIwYxxfn1w-qRUnKrM5pX17IAIzQQ';
+  if (window.fetch && window.AA_pickCanvas) {
+    fetch(REST + '/app_config?key=eq.site_hero&select=value', { headers: { apikey: ANON, Authorization: 'Bearer ' + ANON } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (rows) {
+        if (!Array.isArray(rows)) return;
+        var v = rows[0] && rows[0].value;
+        try {
+          if (v && typeof v === 'object') localStorage.setItem('aa-site-hero', JSON.stringify(v));
+          else localStorage.removeItem('aa-site-hero');
+        } catch (e) {}
+        if (window.AA_CANVAS_OVERRIDE) return;
+        setCanvas(window.AA_pickCanvas(v) || 'kundali-north');
+      })
+      .catch(function () {});
   }
 
   /* ---------- Entrance and pausing ----------

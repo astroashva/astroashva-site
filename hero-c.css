@@ -70,6 +70,38 @@ html[data-lang="hi"] .hc-h b { font-size:13px; letter-spacing:.01em; padding-lef
 .hc-h[data-h="11"] { --x:.9;    --y:.25; }
 .hc-h[data-h="12"] { --x:.75;   --y:.085; }
 
+/* ---------- Canvases ----------
+   The drawing behind the words is a pluggable canvas (html[data-canvas], set
+   before first paint; see index.html and hero-c.js). Every canvas fills the
+   same rectangle, so a swap never moves anything.
+   kundali-north: the default above. kundali-south: the South Indian square
+   chart, signs fixed, Lagna in Aries, houses running clockwise.
+   diya: Diwali, a toran along the top, rangoli in the corners and a row of
+   diyas lit one by one. No house labels; the words stay as they are. */
+[data-canvas="kundali-south"] .hc-h[data-h="1"]  { --x:.375; --y:.125; }
+[data-canvas="kundali-south"] .hc-h[data-h="2"]  { --x:.625; --y:.125; }
+[data-canvas="kundali-south"] .hc-h[data-h="3"]  { --x:.875; --y:.125; }
+[data-canvas="kundali-south"] .hc-h[data-h="4"]  { --x:.875; --y:.375; }
+[data-canvas="kundali-south"] .hc-h[data-h="5"]  { --x:.875; --y:.625; }
+[data-canvas="kundali-south"] .hc-h[data-h="6"]  { --x:.875; --y:.875; }
+[data-canvas="kundali-south"] .hc-h[data-h="7"]  { --x:.625; --y:.875; }
+[data-canvas="kundali-south"] .hc-h[data-h="8"]  { --x:.375; --y:.875; }
+[data-canvas="kundali-south"] .hc-h[data-h="9"]  { --x:.125; --y:.875; }
+[data-canvas="kundali-south"] .hc-h[data-h="10"] { --x:.125; --y:.625; }
+[data-canvas="kundali-south"] .hc-h[data-h="11"] { --x:.125; --y:.375; }
+[data-canvas="kundali-south"] .hc-h[data-h="12"] { --x:.125; --y:.125; }
+[data-canvas="diya"] .hc-houses, [data-canvas="diya"] .hc-cap { display:none; }
+/* South: the words sit in the open middle four cells, centred on them. */
+@media (min-width:769px) { [data-canvas="kundali-south"] .hc-copy { top:50%; } }
+.hc-eyebrow .ev-diya, [data-canvas="diya"] .hc-eyebrow .ev-base { display:none; }
+[data-canvas="diya"] .hc-eyebrow .ev-diya { display:inline; }
+.hc-lines .dl { fill:none; stroke:var(--ink-line); stroke-width:1; stroke-linecap:round; stroke-linejoin:round; }
+.hc-lines .ac { fill:none; stroke:var(--lagna); stroke-width:1.25; stroke-linecap:round; stroke-linejoin:round; }
+.hc-lines .flame { fill:color-mix(in srgb,var(--lagna) 22%,transparent); stroke:var(--lagna); stroke-width:1.25; stroke-linejoin:round; }
+.hc-lines .dot { fill:var(--ink-line); stroke:none; }
+.hc-lines.swap { animation:hc-in .5s ease both; }
+@media (prefers-reduced-motion:reduce) { .hc-lines.swap { animation:none; } }
+
 /* One line of benefit for the house in focus. */
 .hc-cap {
   position:absolute; left:0; top:0; z-index:5; width:max-content; max-width:288px;
@@ -191,6 +223,10 @@ html[data-lang="hi"] .hc-tag { letter-spacing:0; }
   .hc-sky .gl path, .hc-sky .gl circle { fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
   .hc-sky .gl .f { fill:currentColor; stroke:none; }
   .hc-sky .su { color:var(--tint); }
+  /* Diya on phones: the toran and the lamps, faint, behind the words. */
+  [data-canvas="diya"] .hc-sky { display:none; }
+  [data-canvas="diya"] .hc-stage { display:block; position:absolute; inset:0; top:0; bottom:0; z-index:0; pointer-events:none; }
+  [data-canvas="diya"] .hc-lines .dl { stroke:color-mix(in srgb,var(--fg) 30%,var(--bg)); }
   .hc-cue {
     display:grid; place-items:center; position:absolute; left:50%; bottom:16px; width:44px; height:44px; margin-left:-22px;
     border:0; border-radius:50%; background:none; color:var(--fg2); cursor:pointer; -webkit-tap-highlight-color:transparent;
